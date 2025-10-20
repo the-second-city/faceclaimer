@@ -8,6 +8,7 @@ import (
 	_ "image/png"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/gen2brain/webp"
 )
@@ -24,7 +25,10 @@ func fileExists(filename string) bool {
 // imageFromBytes converts the bytes data to an Image.
 func imageFromBytes(data []byte) (image.Image, error) {
 	reader := bytes.NewReader(data)
-	image, _, err := image.Decode(reader)
+	image, format, err := image.Decode(reader)
+
+	slog.Info("Read image data", "format", format)
+
 	return image, err
 }
 
@@ -33,6 +37,13 @@ func SaveWebP(data []byte, dest string, quality int) error {
 	if fileExists(dest) {
 		return fmt.Errorf("Error: %s already exists", dest)
 	}
+
+	// Create the directory structure if it doesn't exist
+	dir := filepath.Dir(dest)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("Error: unable to create directory %s: %v", dir, err)
+	}
+
 	outputFile, err := os.Create(dest)
 	if err != nil {
 		return fmt.Errorf("Error: unable to create %s: %v", dest, err)
