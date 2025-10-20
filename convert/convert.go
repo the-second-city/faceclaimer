@@ -11,16 +11,9 @@ import (
 	"path/filepath"
 
 	"github.com/gen2brain/webp"
-)
 
-// fileExists returns true if the given file or directory exists.
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
+	"image-processor/checks"
+)
 
 // imageFromBytes converts the bytes data to an Image.
 func imageFromBytes(data []byte) (image.Image, error) {
@@ -34,7 +27,7 @@ func imageFromBytes(data []byte) (image.Image, error) {
 
 // SaveWebP converts the given image data to WebP and saves at dest. Recommend 90 quality.
 func SaveWebP(data []byte, dest string, quality int) error {
-	if fileExists(dest) {
+	if checks.PathExists(dest) {
 		return fmt.Errorf("Error: %s already exists", dest)
 	}
 

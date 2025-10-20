@@ -17,7 +17,7 @@ import (
 
 type Config struct {
 	ImagesDir string
-	Domain    string
+	BaseURL   string
 }
 
 type UploadRequest struct {
@@ -87,7 +87,7 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 
 	// The web URL doesn't include the images directory. That way, we can place
 	// the images at root, e.g. https://example.com/guildId/userId/charId/imageId.webp
-	webRoot := strings.Trim(cfg.Domain, "/")
+	webRoot := strings.Trim(cfg.BaseURL, "/")
 	url := strings.Join([]string{webRoot, imageName}, "/")
 
 	c.JSON(http.StatusCreated, url)
@@ -104,10 +104,10 @@ func prepImageName(r UploadRequest) (string, error) {
 	return strings.Join([]string{guild, user, charId, imageName}, "/"), nil
 }
 
-func Run(domain, imagesDir string, port int) {
+func Run(baseURL, imagesDir string, port int) {
 	cfg := &Config{
 		ImagesDir: imagesDir,
-		Domain:    domain,
+		BaseURL:   baseURL,
 	}
 
 	r := setupRouter(cfg)

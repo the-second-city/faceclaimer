@@ -18,6 +18,12 @@ func IsValidURL(urlStr string) bool {
 	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
+// PathExists returns true if the given path exists (file or directory).
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // DirExists returns true if the given directory exists.
 func DirExists(dir string) bool {
 	info, err := os.Stat(dir)
@@ -25,6 +31,15 @@ func DirExists(dir string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+// FileExists returns true if the given file exists (not a directory).
+func FileExists(file string) bool {
+	info, err := os.Stat(file)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }
 
 // IsValidObjectId returns true if the string represents a valid ObjectId.

@@ -18,11 +18,12 @@ import (
 var (
 	port      int
 	imagesDir string
+	baseURL   string
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "image-processor <domain>",
+	Use:   "image-processor",
 	Short: "API for managing character profile images.",
 	Long: `A web API for uploading and deleting character images uploaded to Discord.
 
@@ -32,22 +33,18 @@ BSON ObjectId.
 
 *THIS API TAKES NO AUTHENTICATION!* It is recommended to run it in a jail
 without an internet connection.`,
-	Args: cobra.MatchAll(
-		cobra.ExactArgs(1),
-		func(cmd *cobra.Command, args []string) error {
-			if !checks.IsValidURL(args[0]) {
-				return errors.New("domain must be a valid URL (e.g., https://example.com)")
-			}
-			if !checks.DirExists(imagesDir) {
-				return fmt.Errorf("images-dir does not exist: %s", imagesDir)
-			}
-			return nil
-		},
-	),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if !checks.IsValidURL(baseURL) {
+			return errors.New("base-url must be a valid URL (e.g., https://example.com)")
+		}
+		if !checks.DirExists(imagesDir) {
+			return fmt.Errorf("images-dir does not exist: %s", imagesDir)
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		domain := args[0]
-		slog.Info("Starting images-processor", "imagesDir", imagesDir, "domain", domain)
-		routes.Run(domain, imagesDir, port)
+		slog.Info("Starting images-processor", "imagesDir", imagesDir, "baseURL", baseURL)
+		routes.Run(baseURL, imagesDir, port)
 	},
 }
 
@@ -64,4 +61,6 @@ func init() {
 	// Define command-line flags
 	rootCmd.Flags().IntVar(&port, "port", 8080, "Port to run the server on")
 	rootCmd.Flags().StringVar(&imagesDir, "images-dir", "images", "Directory to store images")
+	rootCmd.Flags().StringVar(&baseURL, "base-url", "", "Base URL for constructing image URLs (e.g., https://example.com)")
+	rootCmd.MarkFlagRequired("base-url")
 }
