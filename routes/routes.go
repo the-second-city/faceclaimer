@@ -20,6 +20,7 @@ import (
 type Config struct {
 	ImagesDir string
 	BaseURL   string
+	Quality   int
 }
 
 type UploadRequest struct {
@@ -87,7 +88,7 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 		return
 	}
 	saveLoc := filepath.Join(cfg.ImagesDir, imageName)
-	err = convert.SaveWebP(imageData, saveLoc, 90)
+	err = convert.SaveWebP(imageData, saveLoc, cfg.Quality)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -209,10 +210,11 @@ func prepImageName(r UploadRequest) (string, error) {
 	return strings.Join([]string{guild, user, charId, imageName}, "/"), nil
 }
 
-func Run(baseURL, imagesDir string, port int) {
+func Run(baseURL, imagesDir string, port, quality int) {
 	cfg := &Config{
 		ImagesDir: imagesDir,
 		BaseURL:   baseURL,
+		Quality:   quality,
 	}
 
 	r := setupRouter(cfg)

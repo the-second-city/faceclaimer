@@ -20,6 +20,7 @@ var (
 	port      int
 	imagesDir string
 	baseURL   string
+	quality   int
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -41,6 +42,9 @@ without an internet connection.`,
 		if !checks.DirExists(imagesDir) {
 			return fmt.Errorf("images-dir does not exist: %s", imagesDir)
 		}
+		if quality < 1 || quality > 100 {
+			return errors.New("quality must be between 1 and 100")
+		}
 
 		// Convert imagesDir to absolute path for consistency and reliability
 		absPath, err := filepath.Abs(imagesDir)
@@ -52,8 +56,8 @@ without an internet connection.`,
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		slog.Info("Starting images-processor", "imagesDir", imagesDir, "baseURL", baseURL)
-		routes.Run(baseURL, imagesDir, port)
+		slog.Info("Starting images-processor", "imagesDir", imagesDir, "baseURL", baseURL, "quality", quality)
+		routes.Run(baseURL, imagesDir, port, quality)
 	},
 }
 
@@ -71,5 +75,6 @@ func init() {
 	rootCmd.Flags().IntVar(&port, "port", 8080, "Port to run the server on")
 	rootCmd.Flags().StringVar(&imagesDir, "images-dir", "images", "Directory to store images")
 	rootCmd.Flags().StringVar(&baseURL, "base-url", "", "Base URL for constructing image URLs (e.g., https://example.com)")
+	rootCmd.Flags().IntVar(&quality, "quality", 90, "WebP quality (1-100)")
 	rootCmd.MarkFlagRequired("base-url")
 }
