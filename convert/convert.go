@@ -12,7 +12,7 @@ import (
 
 	"github.com/gen2brain/webp"
 
-	"image-processor/checks"
+	"faceclaimer/checks"
 )
 
 // imageFromBytes converts the bytes data to an Image.

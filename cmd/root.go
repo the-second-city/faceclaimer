@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"image-processor/checks"
-	"image-processor/routes"
+	"faceclaimer/checks"
+	"faceclaimer/routes"
 )
 
 var (
@@ -25,7 +25,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "image-processor",
+	Use:   "faceclaimer",
 	Short: "API for managing character profile images.",
 	Long: `A web API for uploading and deleting character images uploaded to Discord.
 

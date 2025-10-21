@@ -1,10 +1,6 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
-*/
 package main
 
-import "image-processor/cmd"
+import "faceclaimer/cmd"
 
 func main() {
 	cmd.Execute()

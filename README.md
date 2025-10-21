@@ -1,4 +1,4 @@
-# image-processor
+# faceclaimer
 
 A lightweight web API for processing and managing character profile images from Discord. Images are converted to WebP prior to saving.
 
@@ -11,7 +11,7 @@ go build .
 ## Usage
 
 ```bash
-./image-processor --base-url <url> [options]
+./faceclaimer --base-url <url> [options]
 ```
 
 ### Command-Line Options
@@ -26,7 +26,7 @@ go build .
 ### Example
 
 ```bash
-./image-processor --base-url https://images.example.com --port 8080 --quality 85
+./faceclaimer --base-url https://images.example.com --port 8080 --quality 85
 ```
 
 ## API Endpoints

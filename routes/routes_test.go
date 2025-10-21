@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"image-processor/checks"
+	"faceclaimer/checks"
 )
 
 func init() {

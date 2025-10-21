@@ -13,8 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"image-processor/checks"
-	"image-processor/convert"
+	"faceclaimer/checks"
+	"faceclaimer/convert"
 )
 
 type Config struct {
