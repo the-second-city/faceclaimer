@@ -2,8 +2,11 @@
 package checks
 
 import (
+	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -46,4 +49,26 @@ func FileExists(file string) bool {
 func IsValidObjectId(oid string) bool {
 	_, err := primitive.ObjectIDFromHex(oid)
 	return err == nil
+}
+
+// AbsPath combines base and path into the absolute path. If the absolute path
+// is not within the base path, it returns an error.
+func AbsPath(base, path string) (string, error) {
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		return "", err
+	}
+	fileLoc := filepath.Join(base, path)
+	absPath, err := filepath.Abs(fileLoc)
+	if err != nil {
+		return "", err
+	}
+	// Ensure absBase ends with separator for accurate prefix matching
+	if !strings.HasSuffix(absBase, string(filepath.Separator)) {
+		absBase += string(filepath.Separator)
+	}
+	if !strings.HasPrefix(absPath+string(filepath.Separator), absBase) {
+		return "", fmt.Errorf("%s is not in %s", absPath, absBase)
+	}
+	return absPath, nil
 }

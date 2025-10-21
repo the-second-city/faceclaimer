@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -32,6 +33,9 @@ func setupRouter(cfg *Config) *gin.Engine {
 	r.SetTrustedProxies(nil)
 	r.POST("/image/upload", func(c *gin.Context) {
 		handleImageUpload(c, cfg)
+	})
+	r.DELETE("/image/delete/:imagePath", func(c *gin.Context) {
+		handleSingleDelete(c, cfg)
 	})
 
 	return r
@@ -91,6 +95,26 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 	url := strings.Join([]string{webRoot, imageName}, "/")
 
 	c.JSON(http.StatusCreated, url)
+}
+
+// handleSingleDelete performs a single image deletion.
+func handleSingleDelete(c *gin.Context, cfg *Config) {
+	// We keep imagePath separate from loc, for the return value
+	imagePath := c.Param("imagePath")
+	imageLoc, err := checks.AbsPath(cfg.ImagesDir, imagePath)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !checks.PathExists(imageLoc) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Image not found"})
+		return
+	}
+	if err := os.Remove(imageLoc); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, fmt.Sprintf("Deleted %s", imagePath))
 }
 
 func prepImageName(r UploadRequest) (string, error) {
