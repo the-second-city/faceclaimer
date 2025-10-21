@@ -51,8 +51,7 @@ func IsValidObjectId(oid string) bool {
 	return err == nil
 }
 
-// AbsPath combines base and path into the absolute path. If the absolute path
-// is not within the base path, it returns an error.
+// AbsPath combines base and path into an absolute path, returning an error if the result is outside base.
 func AbsPath(base, path string) (string, error) {
 	absBase, err := filepath.Abs(base)
 	if err != nil {

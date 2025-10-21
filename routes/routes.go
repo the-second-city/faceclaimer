@@ -215,6 +215,7 @@ func prepImageName(r UploadRequest) (string, error) {
 	return strings.Join([]string{guild, user, charId, imageName}, "/"), nil
 }
 
+// Run starts the HTTP server with the given configuration.
 func Run(baseURL, imagesDir string, port, quality int) {
 	cfg := &Config{
 		ImagesDir: imagesDir,

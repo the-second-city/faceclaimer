@@ -25,7 +25,7 @@ func imageFromBytes(data []byte) (image.Image, error) {
 	return image, err
 }
 
-// SaveWebP converts the given image data to WebP and saves at dest. Recommend 90 quality.
+// SaveWebP converts image data to WebP format and saves it to dest with the specified quality (recommended: 90).
 func SaveWebP(data []byte, dest string, quality int) error {
 	if checks.PathExists(dest) {
 		return fmt.Errorf("Error: %s already exists", dest)
