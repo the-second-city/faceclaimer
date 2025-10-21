@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,6 +37,9 @@ func setupRouter(cfg *Config) *gin.Engine {
 	})
 	r.DELETE("/image/delete/:imagePath", func(c *gin.Context) {
 		handleSingleDelete(c, cfg)
+	})
+	r.DELETE("/image/delete/all/:guild/:user/:charID", func(c *gin.Context) {
+		handleCharacterDelete(c, cfg)
 	})
 
 	return r
@@ -115,6 +119,37 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 		return
 	}
 	c.JSON(http.StatusOK, fmt.Sprintf("Deleted %s", imagePath))
+}
+
+// handleCharacterDelete deletes all of a character's images.
+func handleCharacterDelete(c *gin.Context, cfg *Config) {
+	guild := c.Param("guild")
+	user := c.Param("user")
+	charID := c.Param("charID")
+
+	if !checks.IsValidObjectId(charID) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid character ID"})
+		return
+	}
+
+	charPath := filepath.Join(guild, user, charID)
+	charPath, err := checks.AbsPath(cfg.ImagesDir, charPath)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !checks.PathExists(charPath) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Character directory not found"})
+		return
+	}
+
+	if err = os.RemoveAll(charPath); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, fmt.Sprintf("Deleted all images: %s", charID))
 }
 
 func prepImageName(r UploadRequest) (string, error) {
