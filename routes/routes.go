@@ -101,6 +101,42 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 	c.JSON(http.StatusCreated, url)
 }
 
+// cleanEmptyDirs recursively deletes empty directories within baseDir.
+// It does NOT delete baseDir itself, only empty subdirectories.
+func cleanEmptyDirs(baseDir string) error {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		fullPath := filepath.Join(baseDir, entry.Name())
+
+		// Recursively clean subdirectories first
+		if err := cleanEmptyDirs(fullPath); err != nil {
+			return err
+		}
+
+		// After cleaning subdirectories, check if this directory is now empty
+		subEntries, err := os.ReadDir(fullPath)
+		if err != nil {
+			return err
+		}
+
+		if len(subEntries) == 0 {
+			if err := os.Remove(fullPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // handleSingleDelete performs a single image deletion.
 func handleSingleDelete(c *gin.Context, cfg *Config) {
 	// We keep imagePath separate from loc, for the return value
@@ -118,6 +154,11 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	if err := cleanEmptyDirs(cfg.ImagesDir); err != nil {
+		slog.Warn("Failed to clean empty directories", "error", err)
+	}
+
 	c.JSON(http.StatusOK, fmt.Sprintf("Deleted %s", imagePath))
 }
 
@@ -147,6 +188,10 @@ func handleCharacterDelete(c *gin.Context, cfg *Config) {
 	if err = os.RemoveAll(charPath); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if err := cleanEmptyDirs(cfg.ImagesDir); err != nil {
+		slog.Warn("Failed to clean empty directories", "error", err)
 	}
 
 	c.JSON(http.StatusOK, fmt.Sprintf("Deleted all images: %s", charID))
