@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -40,6 +41,14 @@ without an internet connection.`,
 		if !checks.DirExists(imagesDir) {
 			return fmt.Errorf("images-dir does not exist: %s", imagesDir)
 		}
+
+		// Convert imagesDir to absolute path for consistency and reliability
+		absPath, err := filepath.Abs(imagesDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve absolute path for images-dir: %w", err)
+		}
+		imagesDir = absPath
+
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
