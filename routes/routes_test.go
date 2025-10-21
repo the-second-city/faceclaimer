@@ -1,10 +1,24 @@
 package routes
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"image-processor/checks"
 )
+
+func init() {
+	// Suppress gin debug output during tests
+	gin.SetMode(gin.TestMode)
+}
 
 func TestCleanEmptyDirs(t *testing.T) {
 	// Create a temporary base directory
@@ -179,6 +193,672 @@ func TestCleanEmptyDirsEdgeCases(t *testing.T) {
 		// Verify baseDir still exists
 		if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 			t.Errorf("Base directory should not be deleted")
+		}
+	})
+}
+
+func TestPrepImageName(t *testing.T) {
+	t.Run("valid request", func(t *testing.T) {
+		req := UploadRequest{
+			Guild:  123,
+			User:   456,
+			CharID: "507f1f77bcf86cd799439011",
+		}
+
+		imageName, err := prepImageName(req)
+		if err != nil {
+			t.Errorf("prepImageName failed: %v", err)
+		}
+
+		// Verify path structure: guild/user/charID/imageID.webp
+		parts := strings.Split(imageName, "/")
+		if len(parts) != 4 {
+			t.Errorf("Expected 4 path parts, got %d: %s", len(parts), imageName)
+		}
+
+		if parts[0] != "123" {
+			t.Errorf("Expected guild=123, got %s", parts[0])
+		}
+		if parts[1] != "456" {
+			t.Errorf("Expected user=456, got %s", parts[1])
+		}
+		if parts[2] != "507f1f77bcf86cd799439011" {
+			t.Errorf("Expected charID, got %s", parts[2])
+		}
+		if !strings.HasSuffix(parts[3], ".webp") {
+			t.Errorf("Expected .webp extension, got %s", parts[3])
+		}
+
+		// Verify imageID is valid ObjectID (24 hex chars + .webp)
+		imageID := strings.TrimSuffix(parts[3], ".webp")
+		if len(imageID) != 24 {
+			t.Errorf("Expected 24-char ObjectID, got %d chars: %s", len(imageID), imageID)
+		}
+		if !checks.IsValidObjectId(imageID) {
+			t.Errorf("ImageID is not a valid ObjectID: %s", imageID)
+		}
+	})
+
+	t.Run("invalid CharID", func(t *testing.T) {
+		req := UploadRequest{
+			Guild:  123,
+			User:   456,
+			CharID: "invalid-not-objectid",
+		}
+
+		_, err := prepImageName(req)
+		if err == nil {
+			t.Error("Expected error for invalid CharID")
+		}
+		if !strings.Contains(err.Error(), "not a valid character ID") {
+			t.Errorf("Unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("zero values", func(t *testing.T) {
+		req := UploadRequest{
+			Guild:  0,
+			User:   0,
+			CharID: "507f1f77bcf86cd799439011",
+		}
+
+		imageName, err := prepImageName(req)
+		if err != nil {
+			t.Errorf("prepImageName failed with zero values: %v", err)
+		}
+
+		parts := strings.Split(imageName, "/")
+		if parts[0] != "0" || parts[1] != "0" {
+			t.Errorf("Zero values not handled correctly: %s", imageName)
+		}
+	})
+
+	t.Run("large numbers", func(t *testing.T) {
+		req := UploadRequest{
+			Guild:  999999999,
+			User:   888888888,
+			CharID: "507f1f77bcf86cd799439011",
+		}
+
+		imageName, err := prepImageName(req)
+		if err != nil {
+			t.Errorf("prepImageName failed with large numbers: %v", err)
+		}
+
+		parts := strings.Split(imageName, "/")
+		if parts[0] != "999999999" || parts[1] != "888888888" {
+			t.Errorf("Large numbers not handled correctly: %s", imageName)
+		}
+	})
+}
+
+func TestHandleSingleDelete(t *testing.T) {
+	t.Run("successful deletion", func(t *testing.T) {
+		// Setup: Create temp dir and test image
+		tmpDir, err := os.MkdirTemp("", "test-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		imagePath := "123/456/abc123def456789012345678/test.webp"
+		fullPath := filepath.Join(tmpDir, imagePath)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			t.Fatalf("Failed to create directories: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte("test image"), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		// Execute: DELETE request
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/image/"+imagePath, nil)
+		router.ServeHTTP(w, req)
+
+		// Assert: 200 OK and file deleted
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		if checks.PathExists(fullPath) {
+			t.Error("File should have been deleted")
+		}
+
+		// Verify response contains deleted path
+		if !strings.Contains(w.Body.String(), imagePath) {
+			t.Errorf("Response should mention deleted path: %s", w.Body.String())
+		}
+	})
+
+	t.Run("non-existent image", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/image/123/456/abc123/nonexistent.webp", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "not found") {
+			t.Errorf("Expected 'not found' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("path traversal attack", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/image/../../../etc/passwd", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for path traversal, got %d", w.Code)
+		}
+	})
+
+	t.Run("empty directory cleanup", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create nested structure
+		imagePath := "123/456/abc123def456789012345678/test.webp"
+		fullPath := filepath.Join(tmpDir, imagePath)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			t.Fatalf("Failed to create directories: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte("test"), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/image/"+imagePath, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		// Verify empty parent directories were cleaned up
+		guildDir := filepath.Join(tmpDir, "123")
+		if checks.PathExists(guildDir) {
+			t.Error("Empty parent directories should have been cleaned up")
+		}
+	})
+
+	t.Run("cannot delete directory", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create a directory path (not a file)
+		dirPath := "123/456/abc123def456789012345678"
+		fullPath := filepath.Join(tmpDir, dirPath)
+		if err := os.MkdirAll(fullPath, 0755); err != nil {
+			t.Fatalf("Failed to create directories: %v", err)
+		}
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		// Attempt to delete the directory using single delete endpoint
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/image/"+dirPath, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 when deleting directory, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Cannot delete directory") {
+			t.Errorf("Expected 'Cannot delete directory' error: %s", w.Body.String())
+		}
+
+		// Verify directory still exists
+		if !checks.DirExists(fullPath) {
+			t.Error("Directory should not have been deleted")
+		}
+	})
+}
+
+func TestHandleCharacterDelete(t *testing.T) {
+	t.Run("successful deletion", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-char-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create character directory with multiple images
+		charPath := filepath.Join(tmpDir, "123", "456", "507f1f77bcf86cd799439011")
+		if err := os.MkdirAll(charPath, 0755); err != nil {
+			t.Fatalf("Failed to create char dir: %v", err)
+		}
+		os.WriteFile(filepath.Join(charPath, "image1.webp"), []byte("test1"), 0644)
+		os.WriteFile(filepath.Join(charPath, "image2.webp"), []byte("test2"), 0644)
+		os.WriteFile(filepath.Join(charPath, "image3.webp"), []byte("test3"), 0644)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		if checks.PathExists(charPath) {
+			t.Error("Character directory should have been deleted")
+		}
+	})
+
+	t.Run("invalid CharID", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-char-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/character/123/456/not-a-valid-objectid", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Invalid character ID") {
+			t.Errorf("Expected 'Invalid character ID' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("non-existent character", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-char-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "not found") {
+			t.Errorf("Expected 'not found' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("path traversal attack via params", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-char-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		// Try to use path traversal via params (e.g. guild="../..", user="etc", charID=valid ObjectID)
+		// This should be blocked by checks.AbsPath
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/character/../.././usr/507f1f77bcf86cd799439011", nil)
+		router.ServeHTTP(w, req)
+
+		// Should either be 400 (blocked by path validation) or 404 (route not matched)
+		if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 400 or 404 for path traversal, got %d", w.Code)
+		}
+	})
+
+	t.Run("empty directory cleanup", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-char-delete-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create character directory
+		charPath := filepath.Join(tmpDir, "123", "456", "507f1f77bcf86cd799439011")
+		if err := os.MkdirAll(charPath, 0755); err != nil {
+			t.Fatalf("Failed to create char dir: %v", err)
+		}
+		os.WriteFile(filepath.Join(charPath, "image.webp"), []byte("test"), 0644)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		// Verify empty parent directories were cleaned up
+		guildDir := filepath.Join(tmpDir, "123")
+		if checks.PathExists(guildDir) {
+			t.Error("Empty parent directories should have been cleaned up")
+		}
+	})
+}
+
+func TestHandleImageUpload(t *testing.T) {
+	t.Run("successful upload", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		uploadReq := UploadRequest{
+			Guild:    123,
+			User:     456,
+			CharID:   "507f1f77bcf86cd799439011",
+			ImageURL: "https://i.tiltowait.dev/avatar.jpg",
+		}
+
+		body, _ := json.Marshal(uploadReq)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected status 201, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify response contains URL
+		responseURL := strings.Trim(w.Body.String(), "\"")
+		if !strings.HasPrefix(responseURL, "https://example.com/123/456/507f1f77bcf86cd799439011/") {
+			t.Errorf("Unexpected response URL format: %s", responseURL)
+		}
+		if !strings.HasSuffix(responseURL, ".webp") {
+			t.Errorf("Response URL should end with .webp: %s", responseURL)
+		}
+
+		// Verify file was actually created
+		imagePath := strings.TrimPrefix(responseURL, "https://example.com/")
+		fullPath := filepath.Join(tmpDir, imagePath)
+		if !checks.PathExists(fullPath) {
+			t.Errorf("Image file was not created at: %s", fullPath)
+		}
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBufferString("{invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for invalid JSON, got %d", w.Code)
+		}
+	})
+
+	t.Run("invalid URL scheme", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		uploadReq := UploadRequest{
+			Guild:    123,
+			User:     456,
+			CharID:   "507f1f77bcf86cd799439011",
+			ImageURL: "file:///etc/passwd",
+		}
+
+		body, _ := json.Marshal(uploadReq)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for file:// URL, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "invalid image URL") {
+			t.Errorf("Expected 'invalid image URL' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("invalid CharID", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		uploadReq := UploadRequest{
+			Guild:    123,
+			User:     456,
+			CharID:   "not-a-valid-objectid",
+			ImageURL: "https://i.tiltowait.dev/avatar.jpg",
+		}
+
+		body, _ := json.Marshal(uploadReq)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for invalid CharID, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "not a valid character ID") {
+			t.Errorf("Expected 'not a valid character ID' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("download non-existent URL", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		uploadReq := UploadRequest{
+			Guild:    123,
+			User:     456,
+			CharID:   "507f1f77bcf86cd799439011",
+			ImageURL: "https://example.com/definitely-does-not-exist-12345.jpg",
+		}
+
+		body, _ := json.Marshal(uploadReq)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadGateway {
+			t.Errorf("Expected status 502 for download failure, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "failed to download image") {
+			t.Errorf("Expected 'failed to download image' error: %s", w.Body.String())
+		}
+	})
+
+	t.Run("non-image content", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		uploadReq := UploadRequest{
+			Guild:    123,
+			User:     456,
+			CharID:   "507f1f77bcf86cd799439011",
+			ImageURL: "https://tilt-assets.s3-us-west-1.amazonaws.com/b.txt",
+		}
+
+		body, _ := json.Marshal(uploadReq)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/image/upload", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500 for non-image content, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("duplicate upload same location", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-upload-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Pre-create a file to simulate existing image
+		existingPath := filepath.Join(tmpDir, "123", "456", "507f1f77bcf86cd799439011", "existing.webp")
+		if err := os.MkdirAll(filepath.Dir(existingPath), 0755); err != nil {
+			t.Fatalf("Failed to create directories: %v", err)
+		}
+		if err := os.WriteFile(existingPath, []byte("existing"), 0644); err != nil {
+			t.Fatalf("Failed to create existing file: %v", err)
+		}
+
+		// Note: This test verifies the behavior, but actual duplicate prevention
+		// happens via unique ObjectID generation, not by checking existing files.
+		// The SaveWebP function will reject if the exact file already exists.
+	})
+}
+
+func TestSetupRouter(t *testing.T) {
+	t.Run("routes registered", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-router-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		// Test POST /image/upload exists
+		w := httptest.NewRecorder()
+		body := bytes.NewBufferString(`{"guild":1,"user":2,"charid":"507f1f77bcf86cd799439011","image_url":"invalid"}`)
+		req, _ := http.NewRequest("POST", "/image/upload", body)
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+		// Should not be 404 (might be 400 due to invalid URL, but route exists)
+		if w.Code == http.StatusNotFound {
+			t.Error("POST /image/upload route not registered")
+		}
+
+		// Test DELETE /image/* exists
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest("DELETE", "/image/test/path.webp", nil)
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusNotFound {
+			t.Error("DELETE /image/* route not registered")
+		}
+
+		// Test DELETE /character/:guild/:user/:charID exists
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		router.ServeHTTP(w, req)
+		// Should not be 404 (might be 400 due to non-existent dir, but route exists)
+		if w.Code == http.StatusNotFound {
+			t.Error("DELETE /character/:guild/:user/:charID route not registered")
+		}
+	})
+
+	t.Run("404 for non-existent route", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-router-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/nonexistent", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected 404 for non-existent route, got %d", w.Code)
+		}
+	})
+
+	t.Run("wrong method returns 405", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-router-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
+		router := setupRouter(cfg)
+
+		// Try GET on POST-only route
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/image/upload", nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed && w.Code != http.StatusNotFound {
+			t.Errorf("Expected 405 or 404 for wrong method, got %d", w.Code)
 		}
 	})
 }

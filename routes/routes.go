@@ -152,6 +152,10 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Image not found"})
 		return
 	}
+	if checks.DirExists(imageLoc) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Cannot delete directory"})
+		return
+	}
 	if err := os.Remove(imageLoc); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -187,6 +191,7 @@ func handleCharacterDelete(c *gin.Context, cfg *Config) {
 		return
 	}
 
+	slog.Info("Deleting", "path", charPath)
 	if err = os.RemoveAll(charPath); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
