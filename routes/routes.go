@@ -35,10 +35,10 @@ func setupRouter(cfg *Config) *gin.Engine {
 	r.POST("/image/upload", func(c *gin.Context) {
 		handleImageUpload(c, cfg)
 	})
-	r.DELETE("/image/delete/:imagePath", func(c *gin.Context) {
+	r.DELETE("/image/*imagePath", func(c *gin.Context) {
 		handleSingleDelete(c, cfg)
 	})
-	r.DELETE("/image/delete/all/:guild/:user/:charID", func(c *gin.Context) {
+	r.DELETE("/character/:guild/:user/:charID", func(c *gin.Context) {
 		handleCharacterDelete(c, cfg)
 	})
 
@@ -86,7 +86,7 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	saveLoc := strings.Join([]string{cfg.ImagesDir, imageName}, "/")
+	saveLoc := filepath.Join(cfg.ImagesDir, imageName)
 	err = convert.SaveWebP(imageData, saveLoc, 90)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -140,7 +140,8 @@ func cleanEmptyDirs(baseDir string) error {
 // handleSingleDelete performs a single image deletion.
 func handleSingleDelete(c *gin.Context, cfg *Config) {
 	// We keep imagePath separate from loc, for the return value
-	imagePath := c.Param("imagePath")
+	// Wildcard params include a leading slash, so strip it
+	imagePath := strings.TrimPrefix(c.Param("imagePath"), "/")
 	imageLoc, err := checks.AbsPath(cfg.ImagesDir, imagePath)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
