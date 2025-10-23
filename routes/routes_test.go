@@ -205,15 +205,14 @@ func TestPrepImageName(t *testing.T) {
 			CharID: "507f1f77bcf86cd799439011",
 		}
 
-		imageName, err := prepImageName(req)
+		parts, err := prepImageNameParts(req)
 		if err != nil {
-			t.Errorf("prepImageName failed: %v", err)
+			t.Errorf("prepImageNameParts failed: %v", err)
 		}
 
 		// Verify path structure: guild/user/charID/imageID.webp
-		parts := strings.Split(imageName, "/")
 		if len(parts) != 4 {
-			t.Errorf("Expected 4 path parts, got %d: %s", len(parts), imageName)
+			t.Errorf("Expected 4 path parts, got %d: %v", len(parts), parts)
 		}
 
 		if parts[0] != "123" {
@@ -246,7 +245,7 @@ func TestPrepImageName(t *testing.T) {
 			CharID: "invalid-not-objectid",
 		}
 
-		_, err := prepImageName(req)
+		_, err := prepImageNameParts(req)
 		if err == nil {
 			t.Error("Expected error for invalid CharID")
 		}
@@ -262,14 +261,13 @@ func TestPrepImageName(t *testing.T) {
 			CharID: "507f1f77bcf86cd799439011",
 		}
 
-		imageName, err := prepImageName(req)
+		parts, err := prepImageNameParts(req)
 		if err != nil {
-			t.Errorf("prepImageName failed with zero values: %v", err)
+			t.Errorf("prepImageNameParts failed with zero values: %v", err)
 		}
 
-		parts := strings.Split(imageName, "/")
 		if parts[0] != "0" || parts[1] != "0" {
-			t.Errorf("Zero values not handled correctly: %s", imageName)
+			t.Errorf("Zero values not handled correctly: %v", parts)
 		}
 	})
 
@@ -280,14 +278,13 @@ func TestPrepImageName(t *testing.T) {
 			CharID: "507f1f77bcf86cd799439011",
 		}
 
-		imageName, err := prepImageName(req)
+		parts, err := prepImageNameParts(req)
 		if err != nil {
-			t.Errorf("prepImageName failed with large numbers: %v", err)
+			t.Errorf("prepImageNameParts failed with large numbers: %v", err)
 		}
 
-		parts := strings.Split(imageName, "/")
 		if parts[0] != "999999999" || parts[1] != "888888888" {
-			t.Errorf("Large numbers not handled correctly: %s", imageName)
+			t.Errorf("Large numbers not handled correctly: %v", parts)
 		}
 	})
 }
@@ -613,8 +610,11 @@ func TestHandleImageUpload(t *testing.T) {
 		}
 
 		// Verify file was actually created
-		imagePath := strings.TrimPrefix(responseURL, "https://example.com/")
-		fullPath := filepath.Join(tmpDir, imagePath)
+		// Extract path components from URL (they use forward slashes)
+		urlPath := strings.TrimPrefix(responseURL, "https://example.com/")
+		// Split on forward slashes and rejoin with OS-specific separator
+		pathParts := strings.Split(urlPath, "/")
+		fullPath := filepath.Join(append([]string{tmpDir}, pathParts...)...)
 		if !checks.PathExists(fullPath) {
 			t.Errorf("Image file was not created at: %s", fullPath)
 		}

@@ -82,12 +82,12 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 
 	// We need the image name and the save location separately so we can construct
 	// the URL to return to the user.
-	imageName, err := prepImageName(request)
+	imageNameParts, err := prepImageNameParts(request)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	saveLoc := filepath.Join(cfg.ImagesDir, imageName)
+	saveLoc := filepath.Join(append([]string{cfg.ImagesDir}, imageNameParts...)...)
 	err = convert.SaveWebP(imageData, saveLoc, cfg.Quality)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -96,10 +96,11 @@ func handleImageUpload(c *gin.Context, cfg *Config) {
 
 	// The web URL doesn't include the images directory. That way, we can place
 	// the images at root, e.g. https://example.com/guildId/userId/charId/imageId.webp
+	imageURL := strings.Join(imageNameParts, "/")
 	webRoot := strings.Trim(cfg.BaseURL, "/")
-	url := strings.Join([]string{webRoot, imageName}, "/")
+	imageURL = strings.Join([]string{webRoot, imageURL}, "/")
 
-	c.JSON(http.StatusCreated, url)
+	c.JSON(http.StatusCreated, imageURL)
 }
 
 // cleanEmptyDirs recursively deletes empty directories within baseDir.
@@ -144,6 +145,7 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 	// Wildcard params include a leading slash, so strip it
 	imagePath := strings.TrimPrefix(c.Param("imagePath"), "/")
 	imageLoc, err := checks.AbsPath(cfg.ImagesDir, imagePath)
+	fmt.Println(imageLoc)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -204,15 +206,20 @@ func handleCharacterDelete(c *gin.Context, cfg *Config) {
 	c.JSON(http.StatusOK, fmt.Sprintf("Deleted all images: %s", charID))
 }
 
-func prepImageName(r UploadRequest) (string, error) {
+// prepImageNameParts generates path components for a new image upload.
+// It returns a slice containing [guild, user, charID, imageID.webp] that can be
+// used with filepath.Join for OS-specific file paths or strings.Join for URLs.
+// The function validates that CharID is a valid MongoDB ObjectID and generates
+// a unique ObjectID for the image filename.
+func prepImageNameParts(r UploadRequest) ([]string, error) {
 	if !checks.IsValidObjectId(r.CharID) {
-		return "", fmt.Errorf("%s is not a valid character ID", r.CharID)
+		return nil, fmt.Errorf("%s is not a valid character ID", r.CharID)
 	}
 	guild := fmt.Sprint(r.Guild)
 	user := fmt.Sprint(r.User)
 	charId := fmt.Sprint(r.CharID)
 	imageName := fmt.Sprintf("%s.webp", primitive.NewObjectID().Hex())
-	return strings.Join([]string{guild, user, charId, imageName}, "/"), nil
+	return []string{guild, user, charId, imageName}, nil
 }
 
 // Run starts the HTTP server with the given configuration.
