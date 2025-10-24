@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/lmittmann/tint"
 	"github.com/spf13/cobra"
 
 	"faceclaimer/checks"
@@ -35,6 +37,9 @@ BSON ObjectId.
 
 *THIS API TAKES NO AUTHENTICATION!* It is recommended to run it in a jail
 without an internet connection.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initLogger()
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if !checks.IsValidURL(baseURL) {
 			return errors.New("base-url must be a valid URL (e.g., https://example.com)")
@@ -76,4 +81,14 @@ func init() {
 	rootCmd.Flags().StringVar(&baseURL, "base-url", "", "Base URL for constructing image URLs (e.g., https://example.com)")
 	rootCmd.Flags().IntVar(&quality, "quality", 90, "WebP quality (1-100)")
 	rootCmd.MarkFlagRequired("base-url")
+}
+
+// initLogger configures slog.
+func initLogger() {
+	handler := tint.NewHandler(os.Stderr, &tint.Options{
+		Level:      slog.LevelInfo,
+		TimeFormat: time.DateTime,
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
 }
