@@ -21,3 +21,11 @@ steps:
     image: sh
     commands:
       - go build -o /mnt/build-artifacts/
+
+  - name: restart service(s)
+    when:
+      - branch: master
+        event: push
+    image: sh
+    commands:
+      - ssh controller faceclaimer-inconnu
