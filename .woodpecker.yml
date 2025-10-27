@@ -22,7 +22,7 @@ steps:
     commands:
       - go build -o /mnt/build-artifacts/
 
-  - name: restart service(s)
+  - name: redeploy
     when:
       - branch: master
         event: push
