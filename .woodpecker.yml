@@ -1,0 +1,23 @@
+skip_clone: true
+when:
+  - branch: master
+    event: push
+  - event: tag
+  - event: pull_request
+
+steps:
+  - name: clone
+    image: sh
+    commands:
+      - git clone "$CI_REPO_CLONE_URL" .
+      - git checkout "$CI_COMMIT_SHA"
+
+  - name: unit tests
+    image: sh
+    commands:
+      - go test ./...
+
+  - name: build and publish
+    image: sh
+    commands:
+      - go build -o /mnt/build-artifacts/
