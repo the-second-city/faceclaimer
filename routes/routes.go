@@ -215,11 +215,9 @@ func prepImageNameParts(r UploadRequest) ([]string, error) {
 	if !checks.IsValidObjectId(r.CharID) {
 		return nil, fmt.Errorf("%s is not a valid character ID", r.CharID)
 	}
-	guild := fmt.Sprint(r.Guild)
-	user := fmt.Sprint(r.User)
 	charId := fmt.Sprint(r.CharID)
 	imageName := fmt.Sprintf("%s.webp", primitive.NewObjectID().Hex())
-	return []string{guild, user, charId, imageName}, nil
+	return []string{charId, imageName}, nil
 }
 
 // Run starts the HTTP server with the given configuration.

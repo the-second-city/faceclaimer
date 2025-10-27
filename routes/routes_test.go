@@ -210,26 +210,20 @@ func TestPrepImageName(t *testing.T) {
 			t.Errorf("prepImageNameParts failed: %v", err)
 		}
 
-		// Verify path structure: guild/user/charID/imageID.webp
-		if len(parts) != 4 {
-			t.Errorf("Expected 4 path parts, got %d: %v", len(parts), parts)
+		// Verify path structure: charID/imageID.webp
+		if len(parts) != 2 {
+			t.Errorf("Expected 2 path parts, got %d: %v", len(parts), parts)
 		}
 
-		if parts[0] != "123" {
-			t.Errorf("Expected guild=123, got %s", parts[0])
+		if parts[0] != "507f1f77bcf86cd799439011" {
+			t.Errorf("Expected charID, got %s", parts[0])
 		}
-		if parts[1] != "456" {
-			t.Errorf("Expected user=456, got %s", parts[1])
-		}
-		if parts[2] != "507f1f77bcf86cd799439011" {
-			t.Errorf("Expected charID, got %s", parts[2])
-		}
-		if !strings.HasSuffix(parts[3], ".webp") {
-			t.Errorf("Expected .webp extension, got %s", parts[3])
+		if !strings.HasSuffix(parts[1], ".webp") {
+			t.Errorf("Expected .webp extension, got %s", parts[1])
 		}
 
 		// Verify imageID is valid ObjectID (24 hex chars + .webp)
-		imageID := strings.TrimSuffix(parts[3], ".webp")
+		imageID := strings.TrimSuffix(parts[1], ".webp")
 		if len(imageID) != 24 {
 			t.Errorf("Expected 24-char ObjectID, got %d chars: %s", len(imageID), imageID)
 		}
@@ -266,8 +260,11 @@ func TestPrepImageName(t *testing.T) {
 			t.Errorf("prepImageNameParts failed with zero values: %v", err)
 		}
 
-		if parts[0] != "0" || parts[1] != "0" {
-			t.Errorf("Zero values not handled correctly: %v", parts)
+		if parts[0] != "507f1f77bcf86cd799439011" {
+			t.Errorf("CharID not correct: got %s", parts[0])
+		}
+		if !strings.HasSuffix(parts[1], ".webp") {
+			t.Errorf("Image name should end with .webp: %s", parts[1])
 		}
 	})
 
@@ -283,8 +280,12 @@ func TestPrepImageName(t *testing.T) {
 			t.Errorf("prepImageNameParts failed with large numbers: %v", err)
 		}
 
-		if parts[0] != "999999999" || parts[1] != "888888888" {
-			t.Errorf("Large numbers not handled correctly: %v", parts)
+		// With new format, guild/user are not in the path anymore
+		if parts[0] != "507f1f77bcf86cd799439011" {
+			t.Errorf("CharID not correct: got %s", parts[0])
+		}
+		if !strings.HasSuffix(parts[1], ".webp") {
+			t.Errorf("Image name should end with .webp: %s", parts[1])
 		}
 	})
 }
@@ -602,7 +603,7 @@ func TestHandleImageUpload(t *testing.T) {
 
 		// Verify response contains URL
 		responseURL := strings.Trim(w.Body.String(), "\"")
-		if !strings.HasPrefix(responseURL, "https://example.com/123/456/507f1f77bcf86cd799439011/") {
+		if !strings.HasPrefix(responseURL, "https://example.com/507f1f77bcf86cd799439011/") {
 			t.Errorf("Unexpected response URL format: %s", responseURL)
 		}
 		if !strings.HasSuffix(responseURL, ".webp") {
