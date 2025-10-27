@@ -30,6 +30,7 @@ type UploadRequest struct {
 	ImageURL string `json:"image_url"`
 }
 
+// setupRouter sets up gin's route handlers.
 func setupRouter(cfg *Config) *gin.Engine {
 	r := gin.Default()
 	r.SetTrustedProxies(nil)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/lmittmann/tint"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"faceclaimer/checks"
 	"faceclaimer/routes"
@@ -85,9 +86,13 @@ func init() {
 
 // initLogger configures slog.
 func initLogger() {
+	// Detect if stderr is a terminal
+	noColor := !term.IsTerminal(int(os.Stderr.Fd()))
+
 	handler := tint.NewHandler(os.Stderr, &tint.Options{
 		Level:      slog.LevelInfo,
 		TimeFormat: time.DateTime,
+		NoColor:    noColor,
 	})
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
