@@ -62,7 +62,7 @@ without an internet connection.`,
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		slog.Info("Starting images-processor", "imagesDir", imagesDir, "baseURL", baseURL, "quality", quality)
+		slog.Info("Starting images-processor", "imagesDir", imagesDir, "baseURL", baseURL, "quality", quality, "port", port)
 		routes.Run(baseURL, imagesDir, port, quality)
 	},
 }
