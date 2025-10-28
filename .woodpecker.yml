@@ -28,4 +28,4 @@ steps:
         event: push
     image: sh
     commands:
-      - ssh controller faceclaimer-inconnu
+      - ssh controller fc-inconnu
