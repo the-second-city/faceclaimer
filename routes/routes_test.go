@@ -451,7 +451,7 @@ func TestHandleCharacterDelete(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		// Create character directory with multiple images
-		charPath := filepath.Join(tmpDir, "123", "456", "507f1f77bcf86cd799439011")
+		charPath := filepath.Join(tmpDir, "507f1f77bcf86cd799439011")
 		if err := os.MkdirAll(charPath, 0755); err != nil {
 			t.Fatalf("Failed to create char dir: %v", err)
 		}
@@ -463,7 +463,7 @@ func TestHandleCharacterDelete(t *testing.T) {
 		router := setupRouter(cfg)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		req, _ := http.NewRequest("DELETE", "/character/507f1f77bcf86cd799439011", nil)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
@@ -485,7 +485,7 @@ func TestHandleCharacterDelete(t *testing.T) {
 		router := setupRouter(cfg)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/character/123/456/not-a-valid-objectid", nil)
+		req, _ := http.NewRequest("DELETE", "/character/not-a-valid-objectid", nil)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadRequest {
@@ -507,7 +507,7 @@ func TestHandleCharacterDelete(t *testing.T) {
 		router := setupRouter(cfg)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		req, _ := http.NewRequest("DELETE", "/character/507f1f77bcf86cd799439011", nil)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadRequest {
@@ -528,10 +528,10 @@ func TestHandleCharacterDelete(t *testing.T) {
 		cfg := &Config{ImagesDir: tmpDir, BaseURL: "https://example.com", Quality: 90}
 		router := setupRouter(cfg)
 
-		// Try to use path traversal via params (e.g. guild="../..", user="etc", charID=valid ObjectID)
+		// Try to use path traversal via charID param (e.g. charID="../../../etc/passwd")
 		// This should be blocked by checks.AbsPath
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/character/../.././usr/507f1f77bcf86cd799439011", nil)
+		req, _ := http.NewRequest("DELETE", "/character/../../../etc/passwd", nil)
 		router.ServeHTTP(w, req)
 
 		// Should either be 400 (blocked by path validation) or 404 (route not matched)
@@ -548,7 +548,7 @@ func TestHandleCharacterDelete(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		// Create character directory
-		charPath := filepath.Join(tmpDir, "123", "456", "507f1f77bcf86cd799439011")
+		charPath := filepath.Join(tmpDir, "507f1f77bcf86cd799439011")
 		if err := os.MkdirAll(charPath, 0755); err != nil {
 			t.Fatalf("Failed to create char dir: %v", err)
 		}
@@ -558,17 +558,16 @@ func TestHandleCharacterDelete(t *testing.T) {
 		router := setupRouter(cfg)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		req, _ := http.NewRequest("DELETE", "/character/507f1f77bcf86cd799439011", nil)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", w.Code)
 		}
 
-		// Verify empty parent directories were cleaned up
-		guildDir := filepath.Join(tmpDir, "123")
-		if checks.PathExists(guildDir) {
-			t.Error("Empty parent directories should have been cleaned up")
+		// Verify character directory was deleted
+		if checks.PathExists(charPath) {
+			t.Error("Character directory should have been deleted")
 		}
 	})
 }
@@ -814,13 +813,13 @@ func TestSetupRouter(t *testing.T) {
 			t.Error("DELETE /image/* route not registered")
 		}
 
-		// Test DELETE /character/:guild/:user/:charID exists
+		// Test DELETE /character/:charID exists
 		w = httptest.NewRecorder()
-		req, _ = http.NewRequest("DELETE", "/character/123/456/507f1f77bcf86cd799439011", nil)
+		req, _ = http.NewRequest("DELETE", "/character/507f1f77bcf86cd799439011", nil)
 		router.ServeHTTP(w, req)
 		// Should not be 404 (might be 400 due to non-existent dir, but route exists)
 		if w.Code == http.StatusNotFound {
-			t.Error("DELETE /character/:guild/:user/:charID route not registered")
+			t.Error("DELETE /character/:charID route not registered")
 		}
 	})
 

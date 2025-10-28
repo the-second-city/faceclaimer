@@ -60,7 +60,7 @@ Downloads an image from a URL, converts it to WebP, and stores it.
 
 ### Delete Single Image
 
-**DELETE** `/image/{guild}/{user}/{charid}/{imageid}.webp`
+**DELETE** `/image/{charid}/{imageid}.webp`
 
 Deletes a specific image file. Automatically cleans up empty parent directories.
 
@@ -81,13 +81,13 @@ curl -X DELETE http://localhost:8080/image/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c
 
 ### Delete Character Images
 
-**DELETE** `/character/{guild}/{user}/{charid}`
+**DELETE** `/character/{charid}`
 
 Deletes all images for a specific character. Automatically cleans up empty parent directories.
 
 **Example:**
 ```bash
-curl -X DELETE http://localhost:8080/character/12345/67890/68f5a69c1cd9d39b5e9d7ba1
+curl -X DELETE http://localhost:8080/character/68f5a69c1cd9d39b5e9d7ba1
 ```
 
 **Response:**
@@ -106,16 +106,12 @@ Images are organized in a hierarchical directory structure:
 
 ```
 images/
-└── {guild}/
-    └── {user}/
-        └── {charid}/
-            ├── {imageid1}.webp
-            ├── {imageid2}.webp
-            └── {imageid3}.webp
+    └── {charid}/
+        ├── {imageid1}.webp
+        ├── {imageid2}.webp
+        └── {imageid3}.webp
 ```
 
-- `guild`: Discord guild (server) ID (integer)
-- `user`: Discord user ID (integer)
 - `charid`: Character ID (MongoDB ObjectID - 24 hex characters)
 - `imageid`: Image ID (MongoDB ObjectID - 24 hex characters)
 

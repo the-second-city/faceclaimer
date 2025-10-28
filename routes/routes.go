@@ -40,7 +40,7 @@ func setupRouter(cfg *Config) *gin.Engine {
 	r.DELETE("/image/*imagePath", func(c *gin.Context) {
 		handleSingleDelete(c, cfg)
 	})
-	r.DELETE("/character/:guild/:user/:charID", func(c *gin.Context) {
+	r.DELETE("/character/:charID", func(c *gin.Context) {
 		handleCharacterDelete(c, cfg)
 	})
 
@@ -173,8 +173,6 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 
 // handleCharacterDelete deletes all of a character's images.
 func handleCharacterDelete(c *gin.Context, cfg *Config) {
-	guild := c.Param("guild")
-	user := c.Param("user")
 	charID := c.Param("charID")
 
 	if !checks.IsValidObjectId(charID) {
@@ -182,8 +180,7 @@ func handleCharacterDelete(c *gin.Context, cfg *Config) {
 		return
 	}
 
-	charPath := filepath.Join(guild, user, charID)
-	charPath, err := checks.AbsPath(cfg.ImagesDir, charPath)
+	charPath, err := checks.AbsPath(cfg.ImagesDir, charID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
