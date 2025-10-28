@@ -49,7 +49,7 @@ Downloads an image from a URL, converts it to WebP, and stores it.
 
 **Response:**
 ```json
-"https://images.example.com/12345/67890/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp"
+"https://images.example.com/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp"
 ```
 
 **Status Codes:**
@@ -66,12 +66,12 @@ Deletes a specific image file. Automatically cleans up empty parent directories.
 
 **Example:**
 ```bash
-curl -X DELETE http://localhost:8080/image/12345/67890/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp
+curl -X DELETE http://localhost:8080/image/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp
 ```
 
 **Response:**
 ```json
-"Deleted 12345/67890/68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp"
+"Deleted 68f5a69c1cd9d39b5e9d7ba1/68f5ce16713c155df96639bc.webp"
 ```
 
 **Status Codes:**
