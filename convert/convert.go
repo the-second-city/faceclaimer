@@ -19,29 +19,34 @@ import (
 func imageFromBytes(data []byte) (image.Image, error) {
 	reader := bytes.NewReader(data)
 	image, format, err := image.Decode(reader)
-
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode image: %w", err)
+	}
 	slog.Info("Read image data", "format", format)
-
-	return image, err
+	return image, nil
 }
 
 // SaveWebP converts image data to WebP format and saves it to dest with the specified quality (recommended: 90).
-func SaveWebP(data []byte, dest string, quality int) error {
+func SaveWebP(data []byte, dest string, quality int) (err error) {
 	if checks.PathExists(dest) {
-		return fmt.Errorf("Error: %s already exists", dest)
+		return fmt.Errorf("%s already exists", dest)
 	}
 
 	// Create the directory structure if it doesn't exist
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("Error: unable to create directory %s: %v", dir, err)
+		return fmt.Errorf("unable to create directory %s: %w", dir, err)
 	}
 
 	outputFile, err := os.Create(dest)
 	if err != nil {
-		return fmt.Errorf("Error: unable to create %s: %v", dest, err)
+		return fmt.Errorf("unable to create %s: %w", dest, err)
 	}
-	defer outputFile.Close()
+	defer func() {
+		if closeErr := outputFile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close %s: %w", dest, closeErr)
+		}
+	}()
 
 	image, err := imageFromBytes(data)
 	if err != nil {
