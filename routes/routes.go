@@ -32,7 +32,12 @@ type UploadRequest struct {
 
 // setupRouter sets up gin's route handlers.
 func setupRouter(cfg *Config) *gin.Engine {
-	r := gin.Default()
+	var r *gin.Engine
+	if gin.Mode() == gin.TestMode {
+		r = gin.New()
+	} else {
+		r = gin.Default()
+	}
 	r.SetTrustedProxies(nil)
 	r.POST("/image/upload", func(c *gin.Context) {
 		handleImageUpload(c, cfg)
