@@ -151,7 +151,6 @@ func handleSingleDelete(c *gin.Context, cfg *Config) {
 	// Wildcard params include a leading slash, so strip it
 	imagePath := strings.TrimPrefix(c.Param("imagePath"), "/")
 	imageLoc, err := checks.AbsPath(cfg.ImagesDir, imagePath)
-	fmt.Println(imageLoc)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
