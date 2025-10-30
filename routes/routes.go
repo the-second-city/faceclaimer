@@ -229,7 +229,7 @@ func prepImageNameParts(r UploadRequest) ([]string, error) {
 func Run(baseURL, imagesDir string, port, quality int) {
 	cfg := &Config{
 		ImagesDir: imagesDir,
-		BaseURL:   baseURL,
+		BaseURL:   strings.TrimSuffix(baseURL, "/"),
 		Quality:   quality,
 	}
 
