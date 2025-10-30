@@ -1,13 +1,16 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -230,6 +233,35 @@ func Run(baseURL, imagesDir string, port, quality int) {
 		Quality:   quality,
 	}
 
+	// Create context that listens for SIGINT/SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	r := setupRouter(cfg)
-	r.Run(fmt.Sprintf(":%d", port))
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: r,
+	}
+
+	// Initialize in goroutine so it won't block graceful shutdown
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("unable to listen", "err", err)
+			return
+		}
+	}()
+
+	// Listen for interrupt signal
+	<-ctx.Done()
+
+	// Restore default behavior on interrupt signal & notify
+	stop()
+	slog.Info("Shutting down gracefully. Press Ctrl+C again to force.")
+
+	// Inform the server it has 5 seconds to finish current request
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("server forced to shut down", "err", err)
+	}
 }
